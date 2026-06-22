@@ -1,0 +1,10 @@
+.DS_Store
+build/
+*.app/
+*.log
+*.pid
+*.o
+byedpi/*.o
+byedpi/ciadpi
+*.xcuserdata/
+DerivedData/
