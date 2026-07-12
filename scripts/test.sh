@@ -3,12 +3,13 @@
 set -euo pipefail
 
 ROOT_DIR="${0:A:h:h}"
+SWIFT_SOURCES=("$ROOT_DIR"/Sources/DiscordDesync/*.swift)
 APP_BUNDLE="$ROOT_DIR/build/Discord Desync.app"
 PROXY_SCRIPT="$APP_BUNDLE/Contents/Resources/discord-desync-proxy.sh"
 
 zsh -n "$ROOT_DIR/Resources/discord-desync-proxy.sh"
 plutil -lint "$ROOT_DIR/Resources/Info.plist" >/dev/null
-swiftc "$ROOT_DIR/Sources/DiscordDesync/main.swift" \
+swiftc "${SWIFT_SOURCES[@]}" \
   -framework Cocoa \
   -framework WebKit \
   -framework Network \

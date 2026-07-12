@@ -11,6 +11,9 @@ It avoids changing macOS firewall or system proxy settings, and it avoids the Ch
 - Bundled ByeDPI backend
 - Starts ByeDPI when the app opens
 - Stops ByeDPI when the app quits
+- Shows live proxy and page-loading status in the app window
+- Provides direct start, restart, stop, and status controls from the Proxy menu
+- Includes standard macOS editing shortcuts for Discord messages
 - Built-in Settings window:
   - Discord URL
   - health-check URL
@@ -19,6 +22,7 @@ It avoids changing macOS firewall or system proxy settings, and it avoids the Ch
   - custom ByeDPI flags
   - media permission behavior
 - Ad-hoc signed local build with a stable bundle identifier
+- Restricts automatic microphone and camera permission to Discord domains
 
 ## Requirements
 
@@ -95,3 +99,11 @@ Discord Desync embeds [`hufrea/byedpi`](https://github.com/hufrea/byedpi), which
 ## Notes
 
 Discord Desync is not affiliated with Discord or ByeDPI. It is a local convenience wrapper around WebKit and ByeDPI.
+
+## Architecture
+
+- `main.swift` owns the AppKit lifecycle and WebKit presentation.
+- `ProxyController.swift` serializes ByeDPI operations on a background queue so health checks and restarts do not freeze the UI.
+- `Settings.swift` owns persisted configuration and strategy presets.
+- `SettingsWindowController.swift` owns settings presentation and editing.
+- `discord-desync-proxy.sh` owns process discovery, lifecycle, and health checks.

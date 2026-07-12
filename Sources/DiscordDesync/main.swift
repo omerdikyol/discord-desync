@@ -2,216 +2,16 @@ import Cocoa
 import Network
 import WebKit
 
-private let appName = "Discord Desync"
-private let discordDataStoreID = UUID(uuidString: "8D71D487-36B4-4C08-96D9-9C23A7B8D6E1")!
-
-private enum Strategy: String, CaseIterable {
-    case balanced
-    case conservative
-    case aggressive
-    case custom
-
-    var title: String {
-        switch self {
-        case .balanced: return "Balanced"
-        case .conservative: return "Conservative"
-        case .aggressive: return "Aggressive"
-        case .custom: return "Custom"
-        }
-    }
-
-    var flags: String {
-        switch self {
-        case .balanced:
-            return "--disorder 1 --auto=torst --tlsrec 1+s"
-        case .conservative:
-            return "--auto=torst --tlsrec 1+s"
-        case .aggressive:
-            return "--disorder 1 --auto=torst --tlsrec 1+s --split 1+s"
-        case .custom:
-            return Settings.shared.customFlags
-        }
-    }
-}
-
-private final class Settings {
-    static let shared = Settings()
-
-    private let defaults = UserDefaults.standard
-
-    var discordURL: String {
-        get { defaults.string(forKey: "discordURL") ?? "https://discord.com/app" }
-        set { defaults.set(newValue, forKey: "discordURL") }
-    }
-
-    var healthURL: String {
-        get { defaults.string(forKey: "healthURL") ?? "https://discord.com" }
-        set { defaults.set(newValue, forKey: "healthURL") }
-    }
-
-    var port: Int {
-        get {
-            let value = defaults.integer(forKey: "port")
-            return value > 0 ? value : 1080
-        }
-        set { defaults.set(max(1, min(newValue, 65535)), forKey: "port") }
-    }
-
-    var strategy: Strategy {
-        get { Strategy(rawValue: defaults.string(forKey: "strategy") ?? "") ?? .balanced }
-        set { defaults.set(newValue.rawValue, forKey: "strategy") }
-    }
-
-    var customFlags: String {
-        get { defaults.string(forKey: "customFlags") ?? "--disorder 1 --auto=torst --tlsrec 1+s" }
-        set { defaults.set(newValue, forKey: "customFlags") }
-    }
-
-    var startProxyOnLaunch: Bool {
-        get { defaults.object(forKey: "startProxyOnLaunch") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "startProxyOnLaunch") }
-    }
-
-    var stopProxyOnQuit: Bool {
-        get { defaults.object(forKey: "stopProxyOnQuit") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "stopProxyOnQuit") }
-    }
-
-    var grantDiscordMediaPermission: Bool {
-        get { defaults.object(forKey: "grantDiscordMediaPermission") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "grantDiscordMediaPermission") }
-    }
-}
-
-private final class SettingsWindowController: NSWindowController {
-    private let discordURLField = NSTextField()
-    private let healthURLField = NSTextField()
-    private let portField = NSTextField()
-    private let strategyPopup = NSPopUpButton()
-    private let customFlagsField = NSTextField()
-    private let startProxyCheckbox = NSButton(checkboxWithTitle: "Start ByeDPI when Discord Desync opens", target: nil, action: nil)
-    private let stopProxyCheckbox = NSButton(checkboxWithTitle: "Stop ByeDPI when Discord Desync quits", target: nil, action: nil)
-    private let mediaPermissionCheckbox = NSButton(checkboxWithTitle: "Remember Discord microphone/camera permission inside the app", target: nil, action: nil)
-    private let onSave: () -> Void
-
-    init(onSave: @escaping () -> Void) {
-        self.onSave = onSave
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 380),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "\(appName) Settings"
-        super.init(window: window)
-        buildContent()
-        loadSettings()
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    private func buildContent() {
-        guard let contentView = window?.contentView else { return }
-
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 12
-        stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        for item in Strategy.allCases {
-            strategyPopup.addItem(withTitle: item.title)
-        }
-
-        stack.addArrangedSubview(row("Discord URL", discordURLField))
-        stack.addArrangedSubview(row("Health Check URL", healthURLField))
-        stack.addArrangedSubview(row("SOCKS Port", portField))
-        stack.addArrangedSubview(row("Strategy", strategyPopup))
-        stack.addArrangedSubview(row("Custom Flags", customFlagsField))
-        stack.addArrangedSubview(startProxyCheckbox)
-        stack.addArrangedSubview(stopProxyCheckbox)
-        stack.addArrangedSubview(mediaPermissionCheckbox)
-
-        let buttons = NSStackView()
-        buttons.orientation = .horizontal
-        buttons.alignment = .centerY
-        buttons.spacing = 8
-
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancel))
-        let saveButton = NSButton(title: "Save & Restart", target: self, action: #selector(save))
-        saveButton.keyEquivalent = "\r"
-
-        buttons.addArrangedSubview(spacer)
-        buttons.addArrangedSubview(cancelButton)
-        buttons.addArrangedSubview(saveButton)
-        stack.addArrangedSubview(buttons)
-
-        contentView.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: contentView.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
-        ])
-    }
-
-    private func row(_ title: String, _ control: NSView) -> NSStackView {
-        let label = NSTextField(labelWithString: title)
-        label.widthAnchor.constraint(equalToConstant: 130).isActive = true
-
-        control.translatesAutoresizingMaskIntoConstraints = false
-        control.widthAnchor.constraint(greaterThanOrEqualToConstant: 340).isActive = true
-
-        let row = NSStackView(views: [label, control])
-        row.orientation = .horizontal
-        row.alignment = .firstBaseline
-        row.spacing = 12
-        return row
-    }
-
-    private func loadSettings() {
-        let settings = Settings.shared
-        discordURLField.stringValue = settings.discordURL
-        healthURLField.stringValue = settings.healthURL
-        portField.stringValue = String(settings.port)
-        strategyPopup.selectItem(withTitle: settings.strategy.title)
-        customFlagsField.stringValue = settings.customFlags
-        startProxyCheckbox.state = settings.startProxyOnLaunch ? .on : .off
-        stopProxyCheckbox.state = settings.stopProxyOnQuit ? .on : .off
-        mediaPermissionCheckbox.state = settings.grantDiscordMediaPermission ? .on : .off
-    }
-
-    @objc private func cancel() {
-        close()
-    }
-
-    @objc private func save() {
-        let settings = Settings.shared
-        settings.discordURL = discordURLField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        settings.healthURL = healthURLField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        settings.port = Int(portField.stringValue) ?? 1080
-        settings.strategy = Strategy.allCases[strategyPopup.indexOfSelectedItem]
-        settings.customFlags = customFlagsField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        settings.startProxyOnLaunch = startProxyCheckbox.state == .on
-        settings.stopProxyOnQuit = stopProxyCheckbox.state == .on
-        settings.grantDiscordMediaPermission = mediaPermissionCheckbox.state == .on
-        close()
-        onSave()
-    }
-}
+let appName = "Discord Desync"
+let discordDataStoreID = UUID(uuidString: "8D71D487-36B4-4C08-96D9-9C23A7B8D6E1")!
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
     private var window: NSWindow?
     private var webView: WKWebView?
     private var settingsWindowController: SettingsWindowController?
-    private var controllerScript: String {
-        Bundle.main.path(forResource: "discord-desync-proxy", ofType: "sh") ?? "\(FileManager.default.currentDirectoryPath)/Resources/discord-desync-proxy.sh"
-    }
+    private let proxyStatusLabel = NSTextField(labelWithString: "")
+    private let pageStatusLabel = NSTextField(labelWithString: "")
+    private let proxyController = ProxyController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
@@ -224,21 +24,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func applicationWillTerminate(_ notification: Notification) {
         if Settings.shared.stopProxyOnQuit {
-            _ = try? runController("stop-check")
+            _ = try? proxyController.runSynchronously("stop-check")
         }
     }
 
     private func buildMenu() {
         let menu = NSMenu()
+
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
-        appMenu.addItem(NSMenuItem(title: "Reload Discord", action: #selector(reloadDiscord), keyEquivalent: "r"))
-        appMenu.addItem(NSMenuItem(title: "Proxy Status", action: #selector(showProxyStatus), keyEquivalent: "i"))
         appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(title: "Quit \(appName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appMenuItem.submenu = appMenu
         menu.addItem(appMenuItem)
+
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenuItem.submenu = editMenu
+        menu.addItem(editMenuItem)
+
+        let viewMenuItem = NSMenuItem()
+        let viewMenu = NSMenu(title: "View")
+        viewMenu.addItem(NSMenuItem(title: "Reload Discord", action: #selector(reloadDiscord), keyEquivalent: "r"))
+        viewMenuItem.submenu = viewMenu
+        menu.addItem(viewMenuItem)
+
+        let proxyMenuItem = NSMenuItem()
+        let proxyMenu = NSMenu(title: "Proxy")
+        proxyMenu.addItem(NSMenuItem(title: "Start Proxy", action: #selector(startProxy), keyEquivalent: ""))
+        proxyMenu.addItem(NSMenuItem(title: "Restart Proxy", action: #selector(restartProxy), keyEquivalent: ""))
+        proxyMenu.addItem(NSMenuItem(title: "Stop Proxy", action: #selector(stopProxy), keyEquivalent: ""))
+        proxyMenu.addItem(.separator())
+        proxyMenu.addItem(NSMenuItem(title: "Show Status...", action: #selector(showProxyStatus), keyEquivalent: "i"))
+        proxyMenuItem.submenu = proxyMenu
+        menu.addItem(proxyMenuItem)
+
+        let windowMenuItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(NSMenuItem(title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+        windowMenu.addItem(NSMenuItem(title: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
+        windowMenuItem.submenu = windowMenu
+        menu.addItem(windowMenuItem)
+        NSApp.windowsMenu = windowMenu
+
         NSApp.mainMenu = menu
     }
 
@@ -248,20 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             return
         }
 
-        if Settings.shared.startProxyOnLaunch {
-            do {
-                _ = try runController("proxy-start")
-            } catch {
-                showFatalError("Could not start ByeDPI:\n\n\(error.localizedDescription)")
-                return
-            }
-        }
-
         let configuration = WKWebViewConfiguration()
         let dataStore = WKWebsiteDataStore(forIdentifier: discordDataStoreID)
-        let port = NWEndpoint.Port(rawValue: UInt16(Settings.shared.port)) ?? 1080
-        let proxyEndpoint = NWEndpoint.hostPort(host: .name("127.0.0.1", nil), port: port)
-        dataStore.proxyConfigurations = [ProxyConfiguration(socksv5Proxy: proxyEndpoint)]
+        configureProxy(on: dataStore)
         configuration.websiteDataStore = dataStore
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
 
@@ -279,19 +104,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         )
         window.title = appName
         window.center()
-        window.contentView = webView
+        window.contentView = makeContentView(webView: webView)
         window.makeKeyAndOrderFront(nil)
         self.window = window
 
         NSApp.activate(ignoringOtherApps: true)
-        loadDiscord()
+        if Settings.shared.startProxyOnLaunch {
+            runProxyCommand("proxy-start", successMessage: "Proxy connected", reload: true)
+        } else {
+            updateProxyStatus("Proxy auto-start off", color: .secondaryLabelColor)
+            loadDiscord()
+        }
+    }
+
+    private func makeContentView(webView: WKWebView) -> NSView {
+        let contentView = NSView()
+        let statusBar = NSView()
+        let separator = NSBox()
+        let reloadButton = NSButton(title: "Reload", target: self, action: #selector(reloadDiscord))
+        let restartButton = NSButton(title: "Restart Proxy", target: self, action: #selector(restartProxy))
+
+        proxyStatusLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
+        pageStatusLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        pageStatusLabel.textColor = .secondaryLabelColor
+        pageStatusLabel.lineBreakMode = .byTruncatingTail
+
+        for view in [webView, statusBar, separator, proxyStatusLabel, pageStatusLabel, reloadButton, restartButton] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+        }
+        separator.boxType = .separator
+
+        contentView.addSubview(webView)
+        contentView.addSubview(separator)
+        contentView.addSubview(statusBar)
+        statusBar.addSubview(proxyStatusLabel)
+        statusBar.addSubview(pageStatusLabel)
+        statusBar.addSubview(reloadButton)
+        statusBar.addSubview(restartButton)
+
+        NSLayoutConstraint.activate([
+            webView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            webView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: separator.topAnchor),
+            separator.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            separator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            separator.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
+            statusBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            statusBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            statusBar.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            statusBar.heightAnchor.constraint(equalToConstant: 38),
+            proxyStatusLabel.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor, constant: 12),
+            proxyStatusLabel.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
+            pageStatusLabel.leadingAnchor.constraint(equalTo: proxyStatusLabel.trailingAnchor, constant: 14),
+            pageStatusLabel.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
+            pageStatusLabel.trailingAnchor.constraint(lessThanOrEqualTo: reloadButton.leadingAnchor, constant: -12),
+            reloadButton.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
+            restartButton.leadingAnchor.constraint(equalTo: reloadButton.trailingAnchor, constant: 8),
+            restartButton.trailingAnchor.constraint(equalTo: statusBar.trailingAnchor, constant: -10),
+            restartButton.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor)
+        ])
+
+        return contentView
     }
 
     private func loadDiscord() {
-        guard let url = URL(string: Settings.shared.discordURL) else {
+        guard let url = URL(string: Settings.shared.discordURL), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
             showNonFatalError("Invalid Discord URL in settings.")
             return
         }
+        pageStatusLabel.stringValue = "Loading Discord..."
         webView?.load(URLRequest(url: url))
     }
 
@@ -310,24 +192,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     @objc private func showProxyStatus() {
-        do {
-            showNonFatalInfo(try runController("status"))
-        } catch {
-            showNonFatalError(error.localizedDescription)
+        updateProxyStatus("Checking...", color: .systemOrange)
+        proxyController.run("status") { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let status):
+                let isStopped = status.hasPrefix("stopped:")
+                self.updateProxyStatus(isStopped ? "Proxy stopped" : "Proxy connected", color: isStopped ? .secondaryLabelColor : .systemGreen)
+                self.showNonFatalInfo(status)
+            case .failure(let error):
+                self.updateProxyStatus("Proxy unavailable", color: .systemRed)
+                self.showNonFatalError(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc private func startProxy() {
+        runProxyCommand("proxy-start", successMessage: "Proxy connected", reload: true)
+    }
+
+    @objc private func restartProxy() {
+        runProxyCommand("restart", successMessage: "Proxy restarted", reload: true)
+    }
+
+    @objc private func stopProxy() {
+        runProxyCommand("stop-check", successMessage: "Proxy stopped", reload: false, successColor: .secondaryLabelColor)
+    }
+
+    private func runProxyCommand(_ command: String, successMessage: String, reload: Bool, successColor: NSColor = .systemGreen) {
+        updateProxyStatus("Working...", color: .systemOrange)
+        proxyController.run(command) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                self.updateProxyStatus(successMessage, color: successColor)
+                if reload { self.loadDiscord() }
+            case .failure(let error):
+                self.updateProxyStatus("Proxy unavailable", color: .systemRed)
+                self.showNonFatalError(error.localizedDescription)
+            }
         }
     }
 
     private func restartProxyAndReload() {
-        guard Settings.shared.startProxyOnLaunch else {
-            loadDiscord()
-            return
+        if let dataStore = webView?.configuration.websiteDataStore {
+            configureProxy(on: dataStore)
         }
-        do {
-            _ = try runController("restart")
-            loadDiscord()
-        } catch {
-            showNonFatalError("Could not restart ByeDPI:\n\n\(error.localizedDescription)")
-        }
+        runProxyCommand("restart", successMessage: "Proxy restarted", reload: true)
+    }
+
+    private func configureProxy(on dataStore: WKWebsiteDataStore) {
+        let port = NWEndpoint.Port(rawValue: UInt16(Settings.shared.port)) ?? 1080
+        let endpoint = NWEndpoint.hostPort(host: .name("127.0.0.1", nil), port: port)
+        dataStore.proxyConfigurations = [ProxyConfiguration(socksv5Proxy: endpoint)]
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        pageStatusLabel.stringValue = "Loading Discord..."
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        pageStatusLabel.stringValue = "Discord ready"
     }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
@@ -338,45 +263,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        showNonFatalError("Page load failed:\n\n\(error.localizedDescription)")
+        handleNavigationError(error)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        showNonFatalError("Page load failed:\n\n\(error.localizedDescription)")
+        handleNavigationError(error)
     }
 
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
-        decisionHandler(Settings.shared.grantDiscordMediaPermission ? .grant : .prompt)
+        let host = origin.host.lowercased()
+        let isDiscord = host == "discord.com" || host.hasSuffix(".discord.com")
+        decisionHandler(Settings.shared.grantDiscordMediaPermission && isDiscord ? .grant : .prompt)
     }
 
-    private func runController(_ command: String) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = [controllerScript, command]
-        process.environment = ProcessInfo.processInfo.environment.merging(proxyEnvironment()) { _, new in new }
-
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = output
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if process.terminationStatus != 0 {
-            throw NSError(domain: appName, code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: text.isEmpty ? "Command failed: \(command)" : text])
-        }
-        return text
+    private func handleNavigationError(_ error: Error) {
+        let nsError = error as NSError
+        guard !(nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled) else { return }
+        pageStatusLabel.stringValue = "Discord failed to load"
+        showNonFatalError("Page load failed:\n\n\(error.localizedDescription)")
     }
 
-    private func proxyEnvironment() -> [String: String] {
-        let settings = Settings.shared
-        return [
-            "DISCORD_DESYNC_PORT": String(settings.port),
-            "DISCORD_DESYNC_FLAGS": settings.strategy.flags,
-            "DISCORD_DESYNC_HEALTH_URL": settings.healthURL
-        ]
+    private func updateProxyStatus(_ text: String, color: NSColor) {
+        proxyStatusLabel.stringValue = "●  \(text)"
+        proxyStatusLabel.textColor = color
     }
 
     private func showFatalError(_ message: String) {

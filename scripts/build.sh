@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="${0:A:h:h}"
+SWIFT_SOURCES=("$ROOT_DIR"/Sources/DiscordDesync/*.swift)
 APP_NAME="Discord Desync"
 APP_BUNDLE="$ROOT_DIR/build/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
@@ -45,7 +46,7 @@ fi
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES/byedpi"
 
-swiftc "$ROOT_DIR/Sources/DiscordDesync/main.swift" \
+swiftc "${SWIFT_SOURCES[@]}" \
   -framework Cocoa \
   -framework WebKit \
   -framework Network \
