@@ -18,7 +18,7 @@ It avoids changing macOS firewall or system proxy settings, and it avoids the Ch
   - ByeDPI strategy preset
   - custom ByeDPI flags
   - media permission behavior
-- Ad-hoc signed local build so macOS permissions are tied to a stable bundle identity
+- Ad-hoc signed local build with a stable bundle identifier
 
 ## Requirements
 
@@ -79,6 +79,14 @@ Runtime state is stored in:
 ```
 
 This includes the ByeDPI PID file and log.
+
+Discord login/cookies are stored in WebKit's persistent data store for the app bundle identifier:
+
+```text
+~/Library/WebKit/com.omerdikyol.discorddesync
+```
+
+If macOS asks for microphone or camera permission after reinstalling, grant it once. The app also grants Discord's in-page media permission automatically when the setting is enabled.
 
 ## Dependency
 

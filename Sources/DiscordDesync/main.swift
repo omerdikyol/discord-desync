@@ -3,6 +3,7 @@ import Network
 import WebKit
 
 private let appName = "Discord Desync"
+private let discordDataStoreID = UUID(uuidString: "8D71D487-36B4-4C08-96D9-9C23A7B8D6E1")!
 
 private enum Strategy: String, CaseIterable {
     case balanced
@@ -257,7 +258,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
 
         let configuration = WKWebViewConfiguration()
-        let dataStore = WKWebsiteDataStore.default()
+        let dataStore = WKWebsiteDataStore(forIdentifier: discordDataStoreID)
         let port = NWEndpoint.Port(rawValue: UInt16(Settings.shared.port)) ?? 1080
         let proxyEndpoint = NWEndpoint.hostPort(host: .name("127.0.0.1", nil), port: port)
         dataStore.proxyConfigurations = [ProxyConfiguration(socksv5Proxy: proxyEndpoint)]
@@ -268,7 +269,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
-        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
         self.webView = webView
 
         let window = NSWindow(

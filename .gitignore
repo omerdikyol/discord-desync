@@ -8,3 +8,5 @@ byedpi/*.o
 byedpi/ciadpi
 *.xcuserdata/
 DerivedData/
+*.p12
+*.pem
