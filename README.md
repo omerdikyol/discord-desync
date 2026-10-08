@@ -1,6 +1,6 @@
 # Discord Desync
 
-Discord Desync is a small macOS Discord web app that starts a local ByeDPI SOCKS5 proxy and routes only its embedded WebKit view through that proxy.
+A macOS app that opens Discord in WebKit and manages a local ByeDPI SOCKS5 proxy for that embedded view. Proxy lifecycle and settings are handled inside the app.
 
 It avoids changing macOS firewall or system proxy settings, and it avoids the Chrome flag/profile problems that happen when trying to launch Discord through a proxied browser window.
 
@@ -99,6 +99,10 @@ Discord Desync embeds [`hufrea/byedpi`](https://github.com/hufrea/byedpi), which
 ## Notes
 
 Discord Desync is not affiliated with Discord or ByeDPI. It is a local convenience wrapper around WebKit and ByeDPI.
+
+## Reading the implementation
+
+Start with [the AppKit entry point](Sources/DiscordDesync/main.swift), then [ProxyController](Sources/DiscordDesync/ProxyController.swift) for the process queue and [Settings](Sources/DiscordDesync/Settings.swift) for persisted options. [scripts/test.sh](scripts/test.sh) checks the local build and proxy setup; read it before running because it starts processes and inspects local runtime state.
 
 ## Architecture
 
