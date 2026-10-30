@@ -4,6 +4,7 @@ import WebKit
 
 let appName = "Discord Desync"
 let discordDataStoreID = UUID(uuidString: "8D71D487-36B4-4C08-96D9-9C23A7B8D6E1")!
+let discordUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
     private var window: NSWindow?
@@ -94,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
+        webView.customUserAgent = discordUserAgent
         self.webView = webView
 
         let window = NSWindow(

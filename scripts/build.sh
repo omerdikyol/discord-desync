@@ -53,6 +53,7 @@ swiftc "${SWIFT_SOURCES[@]}" \
   -o "$APP_MACOS/$APP_NAME"
 
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_CONTENTS/Info.plist"
+cp "$ROOT_DIR/Resources/AppIcon.icns" "$APP_RESOURCES/AppIcon.icns"
 cp "$ROOT_DIR/Resources/discord-desync-proxy.sh" "$APP_RESOURCES/discord-desync-proxy.sh"
 cp "$ROOT_DIR/byedpi/ciadpi" "$APP_RESOURCES/byedpi/ciadpi"
 chmod +x "$APP_MACOS/$APP_NAME" "$APP_RESOURCES/discord-desync-proxy.sh" "$APP_RESOURCES/byedpi/ciadpi"

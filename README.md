@@ -1,113 +1,77 @@
-# Discord Desync
+<p align="center">
+  <img src="docs/icon.png" width="128" alt="Discord Desync icon">
+</p>
 
-A macOS app that opens Discord in WebKit and manages a local ByeDPI SOCKS5 proxy for that embedded view. Proxy lifecycle and settings are handled inside the app.
+<h1 align="center">Discord Desync</h1>
 
-It avoids changing macOS firewall or system proxy settings, and it avoids the Chrome flag/profile problems that happen when trying to launch Discord through a proxied browser window.
+<p align="center">
+  A tiny native macOS app that opens Discord through a local <a href="https://github.com/hufrea/byedpi">ByeDPI</a> proxy.<br>
+  No system proxy. No firewall changes. Only the app's own WebKit view is proxied.
+</p>
+
+<p align="center">
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-blue">
+  <img alt="Swift" src="https://img.shields.io/badge/Swift-AppKit%20%2B%20WebKit-orange">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+</p>
 
 ## Features
 
-- Native macOS app window for `https://discord.com/app`
-- Per-app WebKit SOCKS5 proxy using `127.0.0.1`
-- Bundled ByeDPI backend
-- Starts ByeDPI when the app opens
-- Stops ByeDPI when the app quits
-- Shows live proxy and page-loading status in the app window
-- Provides direct start, restart, stop, and status controls from the Proxy menu
-- Includes standard macOS editing shortcuts for Discord messages
-- Built-in Settings window:
-  - Discord URL
-  - health-check URL
-  - SOCKS port
-  - ByeDPI strategy preset
-  - custom ByeDPI flags
-  - media permission behavior
-- Ad-hoc signed local build with a stable bundle identifier
-- Restricts automatic microphone and camera permission to Discord domains
+- **Native window** for `https://discord.com/app`, using a per-app SOCKS5 proxy on `127.0.0.1`
+- **Bundled ByeDPI**: starts when the app opens, stops when it quits
+- **Live status** of the proxy and page loading in the window
+- **Proxy menu** with start, restart, stop, and status
+- **Persistent login**: cookies live in WebKit's data store for the app
+- **Safe media permissions**: mic and camera are auto-granted only on Discord domains
+- **macOS editing shortcuts** work in Discord messages
+- **Safari identity** so Discord treats the embedded view as a supported browser
+- **Settings window**: Discord URL, health-check URL, SOCKS port, strategy preset, custom flags, media permission behavior
 
-## Requirements
+## Quick start
 
-- macOS 14 or newer
-- Xcode Command Line Tools
-
-Install tools once:
-
-```bash
-xcode-select --install
-```
-
-## Build
+Requires macOS 14+ and Xcode Command Line Tools (`xcode-select --install`).
 
 ```bash
 git submodule update --init --recursive
-scripts/build.sh
-```
-
-The app is created at:
-
-```text
-build/Discord Desync.app
-```
-
-## Install
-
-```bash
 scripts/build.sh --install
 ```
 
-This installs:
-
-```text
-/Applications/Discord Desync.app
-```
-
-You can then open it from Applications, Spotlight, Launchpad, or the Dock.
+This builds `build/Discord Desync.app` and installs it to `/Applications`. Drop `--install` to only build.
 
 ## Settings
 
-Open `Discord Desync > Settings...`.
+Open **Discord Desync > Settings...**
 
-The default strategy is:
+| Preset | Flags |
+| --- | --- |
+| Balanced (default) | `--disorder 1 --auto=torst --tlsrec 1+s` |
+| Conservative | `--auto=torst --tlsrec 1+s` |
+| Aggressive | `--disorder 1 --auto=torst --tlsrec 1+s --split 1+s` |
+| Custom | your own ByeDPI flags |
 
-```text
---disorder 1 --auto=torst --tlsrec 1+s
-```
+If your network needs a different mode, try another preset or use Custom.
 
-If your network needs a different ByeDPI mode, choose another preset or use `Custom`.
+## Where things live
 
-## Runtime Files
+| What | Path |
+| --- | --- |
+| ByeDPI PID file and log | `~/Library/Application Support/Discord Desync` |
+| Discord login and cookies | `~/Library/WebKit/com.omerdikyol.discorddesync` |
 
-Runtime state is stored in:
-
-```text
-~/Library/Application Support/Discord Desync
-```
-
-This includes the ByeDPI PID file and log.
-
-Discord login/cookies are stored in WebKit's persistent data store for the app bundle identifier:
-
-```text
-~/Library/WebKit/com.omerdikyol.discorddesync
-```
-
-If macOS asks for microphone or camera permission after reinstalling, grant it once. The app also grants Discord's in-page media permission automatically when the setting is enabled.
-
-## Dependency
-
-Discord Desync embeds [`hufrea/byedpi`](https://github.com/hufrea/byedpi), which is MIT licensed.
-
-## Notes
-
-Discord Desync is not affiliated with Discord or ByeDPI. It is a local convenience wrapper around WebKit and ByeDPI.
-
-## Reading the implementation
-
-Start with [the AppKit entry point](Sources/DiscordDesync/main.swift), then [ProxyController](Sources/DiscordDesync/ProxyController.swift) for the process queue and [Settings](Sources/DiscordDesync/Settings.swift) for persisted options. [scripts/test.sh](scripts/test.sh) checks the local build and proxy setup; read it before running because it starts processes and inspects local runtime state.
+After a reinstall macOS may ask for microphone or camera access again. Grant it once.
 
 ## Architecture
 
-- `main.swift` owns the AppKit lifecycle and WebKit presentation.
-- `ProxyController.swift` serializes ByeDPI operations on a background queue so health checks and restarts do not freeze the UI.
-- `Settings.swift` owns persisted configuration and strategy presets.
-- `SettingsWindowController.swift` owns settings presentation and editing.
-- `discord-desync-proxy.sh` owns process discovery, lifecycle, and health checks.
+| File | Role |
+| --- | --- |
+| `main.swift` | AppKit lifecycle and WebKit presentation |
+| `ProxyController.swift` | Runs ByeDPI operations on a background queue so health checks and restarts never freeze the UI |
+| `Settings.swift` | Persisted configuration and strategy presets |
+| `SettingsWindowController.swift` | Settings UI |
+| `discord-desync-proxy.sh` | Process discovery, lifecycle, health checks |
+
+Start with [`main.swift`](Sources/DiscordDesync/main.swift), then [`ProxyController.swift`](Sources/DiscordDesync/ProxyController.swift) and [`Settings.swift`](Sources/DiscordDesync/Settings.swift). [`scripts/test.sh`](scripts/test.sh) checks the local build and proxy setup. Read it before running: it starts processes and inspects local runtime state.
+
+## Credits
+
+Built on [`hufrea/byedpi`](https://github.com/hufrea/byedpi) (MIT). Discord Desync is not affiliated with Discord or ByeDPI. It is a local convenience wrapper around WebKit and ByeDPI.

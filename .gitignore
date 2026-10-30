@@ -10,3 +10,6 @@ byedpi/ciadpi
 DerivedData/
 *.p12
 *.pem
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
